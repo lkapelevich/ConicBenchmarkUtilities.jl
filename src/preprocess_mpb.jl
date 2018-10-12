@@ -32,15 +32,15 @@ end
 function remove_ints_in_nonlinear_cones(c, A, b, con_cones, var_cones, vartypes)
     c = copy(c)
     b = copy(b)
-    new_var_cones = Vector{Tuple{Symbol,Vector{Int}}}(0)
+    new_var_cones = Tuple{Symbol,Vector{Int}}[]
     con_cones = map((a) -> (a[1],vec(collect(a[2]))), con_cones)
     vartypes = copy(vartypes)
 
     nslack = 0
     dropped_idx = Int[]
-    I = Int[]
-    J = Int[]
-    V = Float64[]
+    coninds = Int[]
+    varinds = Int[]
+    vals = Float64[]
     for k in 1:length(var_cones)
         cname, cidx = var_cones[k]
         if !(cname ∈ (:Zero, :NonPos, :NonNeg, :Free))
@@ -48,12 +48,12 @@ function remove_ints_in_nonlinear_cones(c, A, b, con_cones, var_cones, vartypes)
             for i in cidx
                 if vartypes[i] != :Cont
                     nslack += 1
-                    push!(I,nslack)
-                    push!(J,i)
-                    push!(V,1.0)
-                    push!(I,nslack)
-                    push!(J,nslack+length(c))
-                    push!(V,-1.0)
+                    push!(coninds,nslack)
+                    push!(varinds,i)
+                    push!(vals,1.0)
+                    push!(coninds,nslack)
+                    push!(varinds,nslack+length(c))
+                    push!(vals,-1.0)
                     push!(new_cidx,nslack+length(c))
                     push!(dropped_idx, i)
                 else
@@ -73,7 +73,7 @@ function remove_ints_in_nonlinear_cones(c, A, b, con_cones, var_cones, vartypes)
         push!(con_cones, (:Zero, collect((size(A,1)+1):(size(A,1)+nslack))))
 
         A = [A spzeros(size(A,1),nslack)]
-        A = vcat(A, sparse(I,J,V,nslack,size(A,2)))
+        A = vcat(A, sparse(coninds,varinds,vals,nslack,size(A,2)))
     end
 
     return c, A, b, con_cones, new_var_cones, vartypes
@@ -87,7 +87,8 @@ function socrotated_to_soc(c, A, b, con_cones, var_cones, vartypes)
     vartypes = copy(vartypes)
     c = copy(c)
     b = copy(b)
-    I, J, V = findnz(A)
+    nzinds = findall(!iszero, A)
+    (coninds, varinds, vals) = (getindex.(nzinds, 1), getindex.(nzinds, 2), A[nzinds])
     nslack = 0
     # introduce slack variables and put them into SOCRotated cones
     for i in 1:length(con_cones)
@@ -95,9 +96,9 @@ function socrotated_to_soc(c, A, b, con_cones, var_cones, vartypes)
         if cname == :SOCRotated
             for j in cidx
                 nslack += 1
-                push!(I, j)
-                push!(J, nslack+length(c))
-                push!(V, 1.0)
+                push!(coninds, j)
+                push!(varinds, nslack+length(c))
+                push!(vals, 1.0)
                 push!(vartypes,:Cont)
             end
             con_cones[i] = (:Zero, cidx)
@@ -105,42 +106,42 @@ function socrotated_to_soc(c, A, b, con_cones, var_cones, vartypes)
         end
     end
     append!(c, zeros(nslack))
-    A = sparse(I,J,V,size(A,1),size(A,2)+nslack)
+    A = sparse(coninds,varinds,vals,size(A,1),size(A,2)+nslack)
 
     # new rows to add to constraint matrix
-    I = Int[]
-    J = Int[]
-    V = Float64[]
+    coninds = Int[]
+    varinds = Int[]
+    vals = Float64[]
     rowidx = 1
     for i in 1:length(var_cones)
         cname, cidx = var_cones[i]
         if cname == :SOCRotated
             var_cones[i] = (:Free,cidx)
             # (y,z,x) in RSOC <=> (y+z,y-z,sqrt(2)*x) in SOC
-            push!(I, rowidx)
-            push!(J, cidx[1])
-            push!(V, -1.0)
-            push!(I, rowidx)
-            push!(J, cidx[2])
-            push!(V, -1.0)
+            push!(coninds, rowidx)
+            push!(varinds, cidx[1])
+            push!(vals, -1.0)
+            push!(coninds, rowidx)
+            push!(varinds, cidx[2])
+            push!(vals, -1.0)
 
-            push!(I, rowidx+1)
-            push!(J, cidx[1])
-            push!(V, -1.0)
-            push!(I, rowidx+1)
-            push!(J, cidx[2])
-            push!(V, 1.0)
+            push!(coninds, rowidx+1)
+            push!(varinds, cidx[1])
+            push!(vals, -1.0)
+            push!(coninds, rowidx+1)
+            push!(varinds, cidx[2])
+            push!(vals, 1.0)
 
-            append!(I, (rowidx+2):(rowidx+length(cidx)-1))
-            append!(J, cidx[3:end])
-            append!(V, fill(-sqrt(2), length(cidx)-2))
+            append!(coninds, (rowidx+2):(rowidx+length(cidx)-1))
+            append!(varinds, cidx[3:end])
+            append!(vals, fill(-sqrt(2), length(cidx)-2))
             push!(con_cones, (:SOC, (size(A,1)+rowidx):(size(A,1)+rowidx+length(cidx)-1)))
             rowidx += length(cidx)
             append!(b, zeros(length(cidx)))
         end
     end
 
-    A = vcat(A, sparse(I,J,V, rowidx-1, size(A,2)))
+    A = vcat(A, sparse(coninds,varinds,vals, rowidx-1, size(A,2)))
 
     return c, A, b, con_cones, var_cones, vartypes
 end
@@ -160,7 +161,7 @@ function dualize(c, A, b, con_cones, var_cones)
     # s.t.    c + A^Ty \in K_2^*
     #         y        \in K_1^*
 
-    const conedual = Dict{Symbol,Symbol}(
+    conedual = Dict{Symbol,Symbol}(
         :Zero => :Free,
         :Free => :Zero,
         :NonNeg => :NonNeg,
