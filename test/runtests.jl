@@ -4,9 +4,10 @@ using ECOS, SCS, MathProgBase
 import JuMP
 using SparseArrays
 using LinearAlgebra
+using Hypatia
 using ConicBenchmarkUtilities
 
-@testset "example4.cbf" begin
+@testset "example4.cbf to mpb" begin
 
     dat = readcbfdata("example4.cbf")
 
@@ -35,6 +36,38 @@ using ConicBenchmarkUtilities
     writecbfdata("example_out.cbf",newdat,"# Example C.4 from the CBF documentation version 2")
     @test strip(read("example4.cbf", String)) == strip(read("example_out.cbf", String))
     rm("example_out.cbf")
+
+end
+
+@testset "example4.cbf to Hypatia" begin
+
+    dat = readcbfdata("test/example4.cbf")
+    c, A, b, G, h, hypatia_cone, dat.objoffset = ConicBenchmarkUtilities.cbftohypatia(dat)
+
+    @test c ≈ [-1.0, -0.64]
+    @test G ≈ [-50.0 -31; -3.0 2.0; -1.0 0.0; 0.0 -1.0]
+    @test h ≈ [-250.0, 4.0, 0.0, 0.0]
+    @test size(A) == (0, 2)
+    @test size(b) == (0,)
+    @test dat.objoffset == 0.0
+    @test typeof.(hypatia_cone.prms) == [Hypatia.NonpositiveCone; Hypatia.NonnegativeCone; Hypatia.NonnegativeCone]
+    @test hypatia_cone.idxs == [1:1, 2:2, 3:4]
+
+    Hypatia.check_data(c, A, b, G, h, hypatia_cone)
+    (c1, A1, b1, G1, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c, A, b, G, useQR=true)
+    L = Hypatia.QRSymmCache(c1, A1, b1, G1, h, hypatia_cone, Q2, RiQ1)
+    opt = Hypatia.Optimizer(maxiter=100, verbose=false)
+    Hypatia.load_data!(opt, c1, A1, b1, G1, h, hypatia_cone, L)
+    Hypatia.solve!(opt)
+
+    @test opt.x ≈ [1.9482; 4.9222] atol=1e-4
+    @test Hypatia.get_pobj(opt) ≈ -5.0984 atol=1e-4
+
+    # # test CBF writer
+    # newdat = mpbtocbf("example", c, A, b, con_cones, var_cones, vartypes, dat.sense)
+    # writecbfdata("example_out.cbf",newdat,"# Example C.4 from the CBF documentation version 2")
+    # @test strip(read("example4.cbf", String)) == strip(read("example_out.cbf", String))
+    # rm("example_out.cbf")
 
 end
 
