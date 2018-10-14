@@ -4,11 +4,12 @@ const conemap_mpb_to_hypatia = Dict(
     :NonNeg =>  Hypatia.NonnegativeCone,
     :SOC => Hypatia.SecondOrderCone,
     :SOCRotated => Hypatia.RotatedSecondOrderCone,
-    :ExpPrimal => Hypatia.ExponentialCone
+    :ExpPrimal => Hypatia.ExponentialCone,
     # :ExpDual => "EXP*"
+    :SDP => Hypatia.PositiveSemidefiniteCone
 )
 
-const DimCones = Union{Type{Hypatia.NonpositiveCone}, Type{Hypatia.NonnegativeCone}, Type{Hypatia.SecondOrderCone}, Type{Hypatia.SecondOrderCone}}
+const DimCones = Union{Type{Hypatia.NonpositiveCone}, Type{Hypatia.NonnegativeCone}, Type{Hypatia.SecondOrderCone}, Type{Hypatia.SecondOrderCone}, Type{Hypatia.PositiveSemidefiniteCone}}
 
 function get_hypatia_cone(t::T, dim::Int) where T <: DimCones
     t(dim)
@@ -18,12 +19,10 @@ function get_hypatia_cone(t::T, ::Int) where T <: Type{Hypatia.PrimitiveCone}
 end
 # function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
 function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::Vector{Int})
-    @show conesym
     conetype = conemap_mpb_to_hypatia[conesym]
     conedim = length(idxs)
     push!(hypatia_cone.prms, get_hypatia_cone(conetype, conedim))
     push!(hypatia_cone.idxs, UnitRange{Int}(idxs[1], idxs[end]))
-    @show hypatia_cone
     hypatia_cone
 end
 
@@ -87,8 +86,13 @@ function mbgtohypatia(c::Vector{Float64},
 
     h = zeros(cone_constrs + cone_vars)
     b = zeros(zero_constrs)
-    A = zeros(zero_constrs, n)
-    G = zeros(cone_constrs + cone_vars, n)
+    if dense
+        A = zeros(zero_constrs, n)
+        G = zeros(cone_constrs + cone_vars, n)
+    else
+        A = spzeros(zero_constrs, n)
+        G = spzeros(cone_constrs + cone_vars, n)
+    end
 
     i = 0
     j = 0
@@ -118,9 +122,12 @@ function mbgtohypatia(c::Vector{Float64},
 
 end
 
-function cbftohypatia(dat::CBFData)
+function cbftohypatia(dat::CBFData, remove_ints::Bool=false)
     c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat)
     (dat.sense == :Max) && (c .*= -1.0)
+    if remove_ints
+        (c, A, b, con_cones, var_cones, vartypes) = remove_ints_in_nonlinear_cones(c, A, b, con_cones, var_cones, vartypes)
+    end
     (c, A, b, G, h, hypatia_cone) = mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset)
     (c, A, b, G, h, hypatia_cone, dat.objoffset)
 end

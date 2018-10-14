@@ -41,8 +41,8 @@ end
 
 @testset "example4.cbf to Hypatia" begin
 
-    dat = readcbfdata("test/example4.cbf")
-    c, A, b, G, h, hypatia_cone, dat.objoffset = ConicBenchmarkUtilities.cbftohypatia(dat)
+    dat = readcbfdata("example4.cbf")
+    c, A, b, G, h, hypatia_cone, dat.objoffset = cbftohypatia(dat)
 
     @test c ≈ [-1.0, -0.64]
     @test G ≈ [-50.0 -31; -3.0 2.0; -1.0 0.0; 0.0 -1.0]
@@ -165,6 +165,26 @@ end
     @test con_cones == [(:Zero,[1]),(:Zero,[2,3])]
 end
 
+@testset "exponential cone" begin
+
+    # TODO test save output from JuMP/hypatia as exptest.cbf
+
+    (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = cbftompb(readcbfdata("exptest.cbf"))
+
+    @test sense == :Min
+    @test objoffset == 0.0
+    @test all(vartypes .== :Cont)
+    md = MathProgBase.ConicModel(ECOSSolver(verbose=0))
+    MathProgBase.loadproblem!(md, c, A, b, con_cones, var_cones)
+    MathProgBase.optimize!(md)
+    @test MathProgBase.status(md) == :Optimal
+    x_sol = MathProgBase.getsolution(md)
+    @test x_sol ≈ [1.0,exp(1),exp(1)] atol=1e-5
+    @test MathProgBase.getobjval(md) ≈ exp(1) atol=1e-5
+
+    # rm("exptest.cbf")
+end
+
 # SDP tests
 
 @testset "roundtrip read/write" begin
@@ -250,6 +270,14 @@ end
     dat = readcbfdata("psd_var_only.cbf")
     (c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset) = cbftompb(dat)
     @test var_cones == [(:SDP, [1, 2, 3])]
+end
+
+@testset "Instance with only PSD variables hypatia" begin
+    dat = readcbfdata("psd_var_only.cbf")
+    (c, A, b, G, h, hypatia_cone, dat.objoffset) = cbftohypatia(dat)
+    @test isa(hypatia_cone.prms[1], Hypatia.PositiveSemidefiniteCone)
+    @test hypatia_cone.prms[1].dim == 3
+    @test hypatia_cone.idxs == [1:3]
 end
 
 SCSSOLVER = SCSSolver(eps=1e-6, verbose=0)
