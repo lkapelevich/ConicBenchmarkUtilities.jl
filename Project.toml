@@ -4,10 +4,14 @@ authors = ["Lea Kapelevich<leakapelevich@gmail.com>"]
 version = "0.0.0"
 
 [deps]
+CPLEX = "a076750e-1247-5638-91d2-ce28b192dca0"
 ECOS = "e2685f51-7e38-5353-a97d-a921fd2c8199"
 GZip = "92fee26a-97fe-5a0c-ad85-20a5f3185b63"
 Hypatia = "b99e6be6-89ff-11e8-14f8-45c827f4f8f2"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 MathProgBase = "fdba3010-5040-5b88-9595-932c9decdf73"
+Mosek = "6405355b-0ac2-5fba-af84-adbd65488c0e"
+Pajarito = "2f354839-79df-5901-9f0a-cdb2aac6fe30"
 SCS = "c946c3f1-0d1f-5ce8-9dea-7daa1f7e2d13"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"

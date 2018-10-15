@@ -1,11 +1,31 @@
 using Test
-using ECOS, SCS, MathProgBase
-# import Convex
+using ECOS, SCS, Mosek
+using MathProgBase
 import JuMP
 using SparseArrays
 using LinearAlgebra
 using Hypatia
 using ConicBenchmarkUtilities
+#
+# @testset "example1.cbf" begin
+#     dat = readcbfdata("test/example3.cbf")
+#
+#     c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat)
+#     mpb_m = MathProgBase.ConicModel(MosekSolver(LOG=0))
+#     MathProgBase.loadproblem!(mpb_m, c, A, b, con_cones, var_cones)
+#     MathProgBase.optimize!(mpb_m)
+#
+#     (c1, A1, b1, G, h, hypatia_cone) = ConicBenchmarkUtilities.mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset)
+#     Hypatia.check_data(c, A, b, G, h, hypatia_cone)
+#     (c1, A1, b1, G1, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c, A, b, G, useQR=true)
+#     L = Hypatia.QRSymmCache(c1, A1, b1, G1, h, hypatia_cone, Q2, RiQ1)
+#     opt = Hypatia.Optimizer(maxiter=100, verbose=false)
+#     Hypatia.load_data!(opt, c1, A1, b1, G1, h, hypatia_cone, L)
+#     Hypatia.solve!(opt)
+#
+#     @test MathProgBase.getsolution(mpb_m) ≈ opt.x, atol=1e-4
+#     @test MathProgBase.getobjval(mpb_m) ≈ Hypatia.get_pobj(opt), atol=1e-4
+# end
 
 @testset "example4.cbf to mpb" begin
 

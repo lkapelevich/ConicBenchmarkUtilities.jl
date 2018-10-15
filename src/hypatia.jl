@@ -9,7 +9,7 @@ const conemap_mpb_to_hypatia = Dict(
     :SDP => Hypatia.PositiveSemidefiniteCone
 )
 
-const DimCones = Union{Type{Hypatia.NonpositiveCone}, Type{Hypatia.NonnegativeCone}, Type{Hypatia.SecondOrderCone}, Type{Hypatia.SecondOrderCone}, Type{Hypatia.PositiveSemidefiniteCone}}
+const DimCones = Union{Type{Hypatia.NonpositiveCone}, Type{Hypatia.NonnegativeCone}, Type{Hypatia.SecondOrderCone}, Type{Hypatia.RotatedSecondOrderCone}, Type{Hypatia.PositiveSemidefiniteCone}}
 
 function get_hypatia_cone(t::T, dim::Int) where T <: DimCones
     t(dim)
@@ -26,16 +26,12 @@ function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::Ve
     hypatia_cone
 end
 
-add_offset(v::Vector{Int}, offset::Int) = (v .+= offset)
-add_offset(v::UnitRange{Int}, offset::Int) = UnitRange{Int}(v.start+offset:v.stop+offset)
-
 function cbfcones_to_mpbcones!(hypatia_cone::Hypatia.Cone, mpb_cones::Vector{Tuple{Symbol,Vector{Int}}}, offset::Int=0)
     for c in mpb_cones
-        if offset > 0
-            output_idxs = add_offset(c[2], offset)
-        else
-            output_idxs = c[2]
-        end
+        c[1] in (:Zero, :Free) && continue
+        smallest_ind = minimum(c[2])
+        output_idxs = (offset- smallest_ind + 1) .+ c[2]
+        offset += length(c[2])
         add_hypatia_cone!(hypatia_cone, c[1], output_idxs)
     end
     hypatia_cone
