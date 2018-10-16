@@ -21,8 +21,9 @@ end
 function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::Vector{Int})
     conetype = conemap_mpb_to_hypatia[conesym]
     conedim = length(idxs)
-    push!(hypatia_cone.prms, get_hypatia_cone(conetype, conedim))
+    push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, conedim))
     push!(hypatia_cone.idxs, UnitRange{Int}(idxs[1], idxs[end]))
+    push!(hypatia_cone.useduals, false)
     hypatia_cone
 end
 

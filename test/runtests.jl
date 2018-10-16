@@ -84,7 +84,7 @@ end
     @test size(A) == (0, 2)
     @test size(b) == (0,)
     @test dat.objoffset == 0.0
-    @test typeof.(hypatia_cone.prms) == [Hypatia.NonpositiveCone; Hypatia.NonnegativeCone; Hypatia.NonnegativeCone]
+    @test typeof.(hypatia_cone.prmtvs) == [Hypatia.NonpositiveCone; Hypatia.NonnegativeCone; Hypatia.NonnegativeCone]
     @test hypatia_cone.idxs == [1:1, 2:2, 3:4]
 
     Hypatia.check_data(c, A, b, G, h, hypatia_cone)
@@ -309,8 +309,8 @@ end
 @testset "Instance with only PSD variables hypatia" begin
     dat = readcbfdata("psd_var_only.cbf")
     (c, A, b, G, h, hypatia_cone, dat.objoffset) = cbftohypatia(dat)
-    @test isa(hypatia_cone.prms[1], Hypatia.PositiveSemidefiniteCone)
-    @test hypatia_cone.prms[1].dim == 3
+    @test isa(hypatia_cone.prmtvs[1], Hypatia.PositiveSemidefiniteCone)
+    @test hypatia_cone.prmtvs[1].dim == 3
     @test hypatia_cone.idxs == [1:3]
 end
 
