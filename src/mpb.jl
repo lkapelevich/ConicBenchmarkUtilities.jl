@@ -52,7 +52,7 @@ function idx_to_offset(n,i,j)
     return psd_len(n) - psd_len(n-i+1) + (j-i)
 end
 
-function cbftompb(dat::CBFData)
+function cbftompb(dat::CBFData, roundints::Bool=true)
     @assert dat.nvar == (isempty(dat.var) ? 0 : sum(c->c[2],dat.var))
     @assert dat.nconstr == (isempty(dat.con) ? 0 : sum(c->c[2],dat.con))
 
@@ -127,7 +127,9 @@ function cbftompb(dat::CBFData)
     A = sparse(I_A,J_A,-V_A,nconstr,nvar)
 
     vartypes = fill(:Cont, nvar)
-    vartypes[dat.intlist] .= :Int
+    if !roundints
+        vartypes[dat.intlist] .= :Int
+    end
 
     return c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset
 end
