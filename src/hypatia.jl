@@ -120,7 +120,7 @@ function mbgtohypatia(c::Vector{Float64},
 end
 
 function cbftohypatia(dat::CBFData, remove_ints::Bool=false)
-    c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat)
+    c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat, col_major=true)
     (dat.sense == :Max) && (c .*= -1.0)
     if remove_ints
         (c, A, b, con_cones, var_cones, vartypes) = remove_ints_in_nonlinear_cones(c, A, b, con_cones, var_cones, vartypes)

@@ -41,18 +41,22 @@ end
 
 psd_len(n) = div(n*(n+1),2)
 # returns offset from starting index for (i,j) term in n x n matrix
-function idx_to_offset(n,i,j)
+function idx_to_offset(n,i,j,col_major::Bool=false)
     @assert 1 <= i <= n
     @assert 1 <= j <= n
     # upper triangle
     if i > j
         i,j = j,i
     end
-    # think row major
-    return psd_len(n) - psd_len(n-i+1) + (j-i)
+    if col_major
+        return psd_len(j) + i - j - 1
+    else
+        # think row major
+        return psd_len(n) - psd_len(n-i+1) + (j-i)
+    end
 end
 
-function cbftompb(dat::CBFData, roundints::Bool=true)
+function cbftompb(dat::CBFData; roundints::Bool=true, col_major::Bool=false)
     @assert dat.nvar == (isempty(dat.var) ? 0 : sum(c->c[2],dat.var))
     @assert dat.nconstr == (isempty(dat.con) ? 0 : sum(c->c[2],dat.con))
 
@@ -94,14 +98,14 @@ function cbftompb(dat::CBFData, roundints::Bool=true)
 
     c = [c;zeros(nvar-dat.nvar)]
     for (matidx,i,j,v) in dat.objfcoord
-        ix = psdvarstartidx[matidx] + idx_to_offset(dat.psdvar[matidx],i,j)
+        ix = psdvarstartidx[matidx] + idx_to_offset(dat.psdvar[matidx],i,j,col_major)
         @assert c[ix] == 0.0
         scale = (i == j) ? 1.0 : sqrt(2)
         c[ix] = scale*v
     end
 
     for (conidx,matidx,i,j,v) in dat.fcoord
-        ix = psdvarstartidx[matidx] + idx_to_offset(dat.psdvar[matidx],i,j)
+        ix = psdvarstartidx[matidx] + idx_to_offset(dat.psdvar[matidx],i,j,col_major)
         push!(I_A,conidx)
         push!(J_A,ix)
         scale = (i == j) ? 1.0 : sqrt(2)
@@ -109,7 +113,7 @@ function cbftompb(dat::CBFData, roundints::Bool=true)
     end
 
     for (conidx,varidx,i,j,v) in dat.hcoord
-        ix = psdconstartidx[conidx] + idx_to_offset(dat.psdcon[conidx],i,j)
+        ix = psdconstartidx[conidx] + idx_to_offset(dat.psdcon[conidx],i,j,col_major)
         push!(I_A,ix)
         push!(J_A,varidx)
         scale = (i == j) ? 1.0 : sqrt(2)
@@ -118,7 +122,7 @@ function cbftompb(dat::CBFData, roundints::Bool=true)
 
     b = [b;zeros(nconstr-dat.nconstr)]
     for (conidx,i,j,v) in dat.dcoord
-        ix = psdconstartidx[conidx] + idx_to_offset(dat.psdcon[conidx],i,j)
+        ix = psdconstartidx[conidx] + idx_to_offset(dat.psdcon[conidx],i,j,col_major)
         @assert b[ix] == 0.0
         scale = (i == j) ? 1.0 : sqrt(2)
         b[ix] = scale*v
