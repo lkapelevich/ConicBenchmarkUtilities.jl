@@ -236,9 +236,9 @@ end
     @JuMP.variable(jm, x[1:3])
     @JuMP.variable(jm, X[1:3,1:3], PSD)
 
-    @JuMP.objective(jm, Min, vecdot([2 1 0; 1 2 1; 0 1 2],X) + x[2])
+    @JuMP.objective(jm, Min, dot([2 1 0; 1 2 1; 0 1 2],X) + x[2])
     @JuMP.constraint(jm, X[1,1]+X[2,2]+X[3,3]+x[2] == 1.0)
-    @JuMP.constraint(jm, vecdot(ones(3,3),X) + x[1] + x[3] == 0.5)
+    @JuMP.constraint(jm, dot(ones(3,3),X) + x[1] + x[3] == 0.5)
     @JuMP.constraint(jm, [x[2], x[1], x[3]] in MOI.SecondOrderCone(3))
     JuMP.optimize!(jm)
     @test JuMP.termination_status(jm) == MOI.Success
