@@ -46,7 +46,7 @@ function mbgtohypatia(c_in::Vector{Float64},
     vartypes::Vector{Symbol},
     sense::Symbol,
     objoffset::Float64;
-    dense::Bool=true
+    dense::Bool=false
     )
 
     # cannot do integer variables yet
@@ -88,11 +88,15 @@ function mbgtohypatia(c_in::Vector{Float64},
     cone_vars = 0
     cone_var_inds = Int[]
     zero_var_inds = Int[]
+    zero_var_cones = Int[]
+    cone_count = 0
     for (cone_type, inds) in var_cones
+        cone_count += 1
         # TODO treat fixed variables better
         if cone_type == :Zero
             zero_constrs += length(inds)
             push!(zero_var_inds, inds...)
+            push!(zero_var_cones, cone_count)
         elseif cone_type == :ExpPrimal
             # take out if this ever happens
             error("We didn't know CBF allows variables in exponential cones.")
@@ -134,15 +138,13 @@ function mbgtohypatia(c_in::Vector{Float64},
             # j += 1
             # out_inds = j:j+length(inds)-1
             G[out_inds, :] .= A_in[inds, :]
-            @show h, cone_constrs
             h[out_inds] .= b_in[inds]
             j = nextj
         end
     end
-    @show A, length(zero_var_inds), zero_var_inds, i
     # corner case, add variables fixed at zero as constraints TODO treat fixed variables better
     b[zero_var_inds] .= 0.0
-    for (_, inds) in var_cones[zero_var_inds]
+    for (_, inds) in var_cones[zero_var_cones]
         l = length(inds)
         nexti = i + l
         out_inds = i+1:nexti
@@ -162,82 +164,261 @@ function mbgtohypatia(c_in::Vector{Float64},
 
 end
 
-function cbftohypatia(dat::CBFData, remove_ints::Bool=false)
+function cbftohypatia(dat::CBFData; remove_ints::Bool=false, dense::Bool=true)
     c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat, col_major=true, roundints=true)
     (dat.sense == :Max) && (c .*= -1.0)
     if remove_ints
         (c, A, b, con_cones, var_cones, vartypes) = remove_ints_in_nonlinear_cones(c, A, b, con_cones, var_cones, vartypes)
     end
-    (c, A, b, G, h, hypatia_cone) = mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset)
+    (c, A, b, G, h, hypatia_cone) = mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset, dense = dense)
     (c, A, b, G, h, hypatia_cone, dat.objoffset)
 end
 
-# function cbfcones_to_hypatiacones(c::Vector{Tuple{String,Int}},total)
-#     i = 1
-#     mpb_cones = Tuple{Symbol,Vector{Int}}[]
-#
-#     for (cname,count) in c
-#         conesymbol = conemap[cname]
-#         if conesymbol == :ExpPrimal
-#             @assert count == 3
-#             indices = i+2:-1:i
-#         else
-#             indices = i:(i+count-1)
-#         end
-#         push!(mpb_cones, (conesymbol, collect(indices)))
-#         i += count
-#     end
-#     @assert i == total + 1
-#     return mpb_cones
-# end
 
-# function cbftohypatia(dat::CBFData; roundints::Bool=true)
-#     @assert dat.nvar == (isempty(dat.var) ? 0 : sum(c->c[2],dat.var))
-#     @assert dat.nconstr == (isempty(dat.con) ? 0 : sum(c->c[2],dat.con))
+
+# const conemap_mpb_to_hypatia = Dict(
+#     "L+" => Hypatia.NonpositiveCone,
+#     "L-" =>  Hypatia.NonnegativeCone,
+#     "Q" => Hypatia.SecondOrderCone,
+#     "QR" => Hypatia.RotatedSecondOrderCone,
+#     "EXP" => Hypatia.ExponentialCone,
+#     # :ExpDual => "EXP*"
+#     "SDP" => Hypatia.PositiveSemidefiniteCone
+# )
 #
-#     c = zeros(dat.nvar)
-#     for (i,v) in dat.objacoord
+# function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
+#     conetype = conemap_mpb_to_hypatia[conesym]
+#     conedim = length(idxs)
+#     push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, conedim))
+#     push!(hypatia_cone.idxs, output_idxs)
+#     push!(hypatia_cone.useduals, false)
+#     nothing
+# end
+#
+# function cbfcones_to_hypatiacones!(hypatia_cone::Hypatia.Cone, c::Vector{Tuple{String,Int}}, offset::Int=0)
+#     for (cname, count) in c
+#         cname in ("L=", "F") && continue
+#         cname == "EXP" && @assert count == 3
+#         cname == "EXP*" && error("We cannot handle the exponential dual cone yet.")
+#         output_idxs = UnitRange{Int}(offset+1, offset+count)
+#         offset += count
+#         add_hypatia_cone!(hypatia_cone, cname, output_idxs)
+#     end
+#     nothing
+# end
+#
+# psdconstartidx = Int[]
+# for i in 1:length(dat.psdcon)
+#     if i == 1
+#         push!(psdconstartidx,dat.nconstr+1)
+#     else
+#         push!(psdconstartidx,psdconstartidx[i-1] + psd_len(dat.psdcon[i-1]))
+#     end
+#     push!(con_cones,(:SDP,psdconstartidx[i]:psdconstartidx[i]+psd_len(dat.psdcon[i])-1))
+# end
+# nconstr = (length(dat.psdcon) > 0) ? psdconstartidx[end] + psd_len(dat.psdcon[end]) - 1 : dat.nconstr
+#
+# function add_psd_cones!(hypatia_cone::Hypatia.Cone, psd_dims::Vector{Int}, offset::Int)
+#     total_len = 0
+#     for d in psd_dims
+#         len = psd_len(d)
+#         total_len += len
+#         output_idxs = UnitRange{Int}(offset+1, offset+len)
+#         add_hypatia_cone!(hypatia_cone, "SDP", output_idxs)
+#         offset += len
+#     end
+#     total_len
+# end
+#
+# function cbftohypatia(dat::CBFData; roundints::Bool=true, dense::Bool=false)
+#     @assert dat.nvar == (isempty(dat.var) ? 0 : sum(c -> c[2], dat.var))
+#     @assert dat.nconstr == (isempty(dat.con) ? 0 : sum(c -> c[2], dat.con))
+#
+#     if !isempty(intlist)
+#         @warn "We cannot handle integer variables yet. Variables will be treated as continuous."
+#     end
+#
+#     # x variables are ordered as vectors followed by all PSD variables
+#     # A matrix constraints ordered as L= constraints, then fixed variables
+#     # G matrix ordered as cone constraints (PSD last), then cone variables (PSD last)
+#     # cones order must match order of constraints in G
+#
+#     # cone
+#     hypatia_cone = Hypatia.Cone()
+#     cbfcones_to_hypatiacones!(hypatia_cone, dat.con)
+#     len_psd_con = add_psd_cones!(hypatia_cone, dat.psdvar, dat.nconstr)
+#     cbfcones_to_hypatiacones!(hypatia_cone, dat.var, dat.nconstr + len_psd_con)
+#     len_psd_var = add_psd_cones!(hypatia_cone, dat.psdcon, dat.nconstr + len_psd_con + dat.nvar)
+#     n = dat.nvar + len_psd_var
+#
+#     # c
+#     c = zeros(dat.nvar + len_psd_var)
+#     for (i, v) in dat.objacoord
 #         c[i] = v
 #     end
+#     nvarcones = 0
+#     for v in dat.var
+#         !(v[1] in ("L=", "F")) && (nvarcones += 1)
+#     end
+#     for (matidx, i, j, v) in dat.objfcoord
+#         # variable index of first element in PSD cone + column major offset
+#         ix = (hypatia_cone.idxs[nvarcones + matidx + 1]).start + idx_to_offset(dat.psdvar[matidx], i, j, true)
+#         @assert c[ix] == 0.0
+#         scale = (i == j) ? 1.0 : sqrt(2)
+#         c[ix] = scale * v
+#     end
+#     if dat.sense == :Max
+#         c .= -c
+#     end
 #
-#     var_cones = cbfcones_to_mpbcones(dat.var, dat.nvar)
-#     con_cones = cbfcones_to_mpbcones(dat.con, dat.nconstr)
-#
+#     # A, b include all vars in zero cone, constraints in zero cone
+#     # number of fixed variables
+#     m1 = sum(cone[2] for cone in dat.con if cone[1] == "L=")
+#     m2 = sum(cone[2] for cone in dat.var if cone[1] == "L=")
+#     m = m1 + m2
+#     if dense
+#         A = zeros(m)
+#     else
+#         A = spzeros(m)
+#     end
+#     b = zeros(m)
+#     # for L= constraints just copy over data
 #     I_A, J_A, V_A = unzip(dat.acoord)
-#     b = zeros(dat.nconstr)
-#     for (i,v) in dat.bcoord
-#         b[i] = v
+#     # con_inds = [cone[1] == "L=" for cone in dat.con]
+#     Ainds = [i for i in 1:length(I_A) if dat.con[I_A[i]][1] == "L="]
+#     # also include L= constraints involving PSD variables
+#     for (conidx, matidx, i, j, v) in dat.fcoord
+#         ix = (hypatia_cone.idxs[nvarcones + matidx + 1]).start + idx_to_offset(dat.psdvar[matidx], i, j, true)
+#         push!(I_A, conidx)
+#         push!(J_A, ix)
+#         scale = (i == j) ? 1.0 : sqrt(2)
+#         push!(V_A, scale * v)
+#     end
+#     A[1:m1, :] .= sparse(I_A[Ainds], J_A[Ainds], -V_A[Ainds], m1, dat.nvar + len_psd_var)
+#     # identity for vars in L=
+#     fixed_var_idxs = Int[]
+#     idx = 0
+#     for var in dat.var
+#         if var[1] == "L="
+#             push!(fixed_var_idxs, collect(idx+1:idx+var[2])...)
+#             idx += var[2]
+#         end
+#     end
+#     A[m1+1:end, fixed_var_idxs] .= Matrix(I, m2, m2)
+#
+#     for (i, v) in dat.bcoord
+#         if Ainds[i]
+#             b[i] = v
+#         end
 #     end
 #
-#     psdvarstartidx = Int[]
-#     for i in 1:length(dat.psdvar)
-#         if i == 1
-#             push!(psdvarstartidx,dat.nvar+1)
-#         else
-#             push!(psdvarstartidx,psdvarstartidx[i-1] + psd_len(dat.psdvar[i-1]))
-#         end
-#         push!(var_cones,(:SDP,psdvarstartidx[i]:psdvarstartidx[i]+psd_len(dat.psdvar[i])-1))
+#     # G, h
+#     # constraints in cones
+#     m3 = dat.nconstr + len_psd_con - m1
+#     # variables in cones
+#     m4 = length([v for v in dat.var if !(v[1] in ("F", "L="))]) + len_psd_var
+#     m = m3 + m4
+#     if dense
+#         G = zeros(m)
+#     else
+#         G = spzeros(m)
 #     end
-#     nvar = (length(dat.psdvar) > 0) ? psdvarstartidx[end] + psd_len(dat.psdvar[end]) - 1 : dat.nvar
+#     h = zeros(m)
 #
 #     psdconstartidx = Int[]
 #     for i in 1:length(dat.psdcon)
 #         if i == 1
-#             push!(psdconstartidx,dat.nconstr+1)
+#             push!(psdconstartidx, dat.nconstr + 1)
 #         else
 #             push!(psdconstartidx,psdconstartidx[i-1] + psd_len(dat.psdcon[i-1]))
 #         end
-#         push!(con_cones,(:SDP,psdconstartidx[i]:psdconstartidx[i]+psd_len(dat.psdcon[i])-1))
 #     end
-#     nconstr = (length(dat.psdcon) > 0) ? psdconstartidx[end] + psd_len(dat.psdcon[end]) - 1 : dat.nconstr
-#
-#     c = [c;zeros(nvar-dat.nvar)]
-#     for (matidx,i,j,v) in dat.objfcoord
-#         ix = psdvarstartidx[matidx] + idx_to_offset(dat.psdvar[matidx],i,j,col_major)
-#         @assert c[ix] == 0.0
+#     I_A, J_A, V_A = unzip(dat.acoord)
+#     # add PSD constraints
+#     for (conidx, varidx, i, j, v) in dat.hcoord
+#         ix = psdconstartidx[conidx] + idx_to_offset(dat.psdcon[conidx], i, j, true)
+#         push!(I_A, ix)
+#         push!(J_A, varidx)
 #         scale = (i == j) ? 1.0 : sqrt(2)
-#         c[ix] = scale*v
+#         push!(V_A, scale * v)
 #     end
+#     Ginds = [i for i in 1:length(I_A) if dat.con[I_A[i]][1] != "L="]
+#
+#     for (conidx,i,j,v) in dat.dcoord
+#         ix = psdconstartidx[conidx] + idx_to_offset(dat.psdcon[conidx],i,j,col_major)
+#         @assert b[ix] == 0.0
+#         scale = (i == j) ? 1.0 : sqrt(2)
+#         b[ix] = scale*v
+#     end
+#     # for cone constraints just copy over data
+#
+#     G[1:dat.nconstr, :] .= sparse(I_A[!Ainds], J_A[!Ainds], -V_A[!Ainds], dat.nconstr, dat.nvar + len_psd_var)
+#     # positive semidefinite cone constraints
+#
+#
+#     # exponential cone constraints are actually in reverse order
+#     exp_con_indices = Vector{Int}[]
+#     offset = 0
+#     for (cone_type, count) in dat.con
+#         if cone_type == :ExpPrimal
+#             push!(exp_con_indices, collect(offset+1:offset+3))
+#         end
+#         offset += count
+#     end
+#
+#     # TODO when going CBF -> hypatia directly this will definitely not need to happen
+#     for ind_collection in exp_con_indices
+#         A_in[ind_collection, :] .= A_in[reverse(ind_collection), :]
+#         b_in[ind_collection, :] .= b_in[reverse(ind_collection), :]
+#     end
+#
+#
+#
+#
+#     #
+#     # I_A, J_A, V_A = unzip(dat.acoord)
+#     for (i, j, v) in dat.acoord
+#         offset = zero_count + cone_count + 1
+#         if dat.con[i][1] == "L="
+#             zero_count += dat.con[i][2]
+#             A[zero_count, j] = v
+#         else
+#             if dat.con[i][1] == "EXP"
+#
+#             cone_count += 1
+#             G[cone_count, j] = v
+#         end
+#     end
+#
+#     A = sparse(I_A,J_A,-V_A,nconstr,nvar)
+#     b = zeros(dat.nconstr)
+#     for (i, v) in dat.bcoord
+#         b[i] = v
+#     end
+#
+#     # psdvarstartidx = Int[]
+#     # for i in 1:length(dat.psdvar)
+#     #     if i == 1
+#     #         push!(psdvarstartidx, dat.nvar + 1)
+#     #     else
+#     #         push!(psdvarstartidx, psdvarstartidx[i-1] + psd_len(dat.psdvar[i-1]))
+#     #     end
+#     #     push!(var_cones,(:SDP, psdvarstartidx[i]:psdvarstartidx[i] + psd_len(dat.psdvar[i])-1))
+#     # end
+#     # nvar = (length(dat.psdvar) > 0) ? psdvarstartidx[end] + psd_len(dat.psdvar[end]) - 1 : dat.nvar
+#
+#     # psdconstartidx = Int[]
+#     # for i in 1:length(dat.psdcon)
+#     #     if i == 1
+#     #         push!(psdconstartidx,dat.nconstr+1)
+#     #     else
+#     #         push!(psdconstartidx,psdconstartidx[i-1] + psd_len(dat.psdcon[i-1]))
+#     #     end
+#     #     push!(con_cones,(:SDP,psdconstartidx[i]:psdconstartidx[i]+psd_len(dat.psdcon[i])-1))
+#     # end
+#     # nconstr = (length(dat.psdcon) > 0) ? psdconstartidx[end] + psd_len(dat.psdcon[end]) - 1 : dat.nconstr
+#
+#
 #
 #     for (conidx,matidx,i,j,v) in dat.fcoord
 #         ix = psdvarstartidx[matidx] + idx_to_offset(dat.psdvar[matidx],i,j,col_major)

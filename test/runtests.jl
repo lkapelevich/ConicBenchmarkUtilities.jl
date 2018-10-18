@@ -9,6 +9,7 @@ using ConicBenchmarkUtilities
 
 @testset "example1.cbf" begin
     dat = readcbfdata("test/example1.cbf")
+    # SOC constraint, PSD variables
 
     c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat)
 
@@ -17,7 +18,7 @@ using ConicBenchmarkUtilities
     MathProgBase.optimize!(mpb_m)
 
     c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat, col_major=true)
-    (c1, A1, b1, G, h, hypatia_cone) = ConicBenchmarkUtilities.mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset)
+    (c1, A1, b1, G, h, hypatia_cone) = ConicBenchmarkUtilities.mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset, dense = false)
     Hypatia.check_data(c1, A1, b1, G, h, hypatia_cone)
     (c2, A2, b2, G2, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c1, A1, b1, G, useQR=true)
     L = Hypatia.QRSymmCache(c2, A2, b2, G2, h, hypatia_cone, Q2, RiQ1)
@@ -27,6 +28,28 @@ using ConicBenchmarkUtilities
 
     MathProgBase.getsolution(mpb_m)
     opt.x
+
+    @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(opt), atol=1e-4)
+end
+
+@testset "example1d.cbf" begin
+    dat = readcbfdata("test/example1d.cbf")
+    # RSOC constraint, PSD variables
+
+    c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat)
+
+    mpb_m = MathProgBase.ConicModel(MosekSolver())
+    MathProgBase.loadproblem!(mpb_m, c, A, b, con_cones, var_cones)
+    MathProgBase.optimize!(mpb_m)
+
+    c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat, col_major=true)
+    (c1, A1, b1, G, h, hypatia_cone) = ConicBenchmarkUtilities.mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset, dense = false)
+    Hypatia.check_data(c1, A1, b1, G, h, hypatia_cone)
+    (c2, A2, b2, G2, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c1, A1, b1, G, useQR=true)
+    L = Hypatia.QRSymmCache(c2, A2, b2, G2, h, hypatia_cone, Q2, RiQ1)
+    opt = Hypatia.Optimizer(maxiter=200, verbose=true)
+    Hypatia.load_data!(opt, c2, A2, b2, G2, h, hypatia_cone, L)
+    Hypatia.solve!(opt)
 
     @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(opt), atol=1e-4)
 end

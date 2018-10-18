@@ -97,6 +97,12 @@ git-tree-sha1 = "ee443ef166b29282301468d8af403e1ed8f5412e"
 uuid = "92fee26a-97fe-5a0c-ad85-20a5f3185b63"
 version = "0.5.0"
 
+[[Gurobi]]
+deps = ["Compat", "Libdl", "LinQuadOptInterface", "MathProgBase"]
+git-tree-sha1 = "24d5d140801079c1b0795215a79a000dd5864ec0"
+uuid = "2e9cd046-0924-5485-92f1-d5272153d98b"
+version = "0.5.3"
+
 [[Hypatia]]
 deps = ["Combinatorics", "DelimitedFiles", "DiffResults", "FFTW", "ForwardDiff", "IterativeSolvers", "LinearAlgebra", "MathOptInterface", "Printf", "Random", "SparseArrays", "Test"]
 git-tree-sha1 = "286bed64e496753a867b69ca4a4f2b1ee602db3f"
