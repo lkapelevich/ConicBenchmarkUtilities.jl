@@ -1,0 +1,45 @@
+# Example C.3 from the CBF documentation version 3
+# File written using this version of the Conic Benchmark Format:
+# Version 3.
+
+VER
+3
+
+POWCONES
+2 4
+2
+8.0
+1.0
+2
+1.0
+1.0
+
+OBJSENSE
+MAX
+
+VAR
+3 1
+@1:POW 3
+
+CON
+6 2
+@0:POW 3
+@0:POW 3
+
+OBJACOORD
+1
+2 1.0
+
+ACOORD
+6
+1 0 1.0
+2 0 1.0
+2 1 1.0
+4 1 1.0
+5 0 1.0
+5 1 1.0
+
+BCOORD
+2
+0 1.0
+3 1.0
