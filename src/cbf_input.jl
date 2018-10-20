@@ -5,9 +5,9 @@ mutable struct CBFData
     psdvar::Vector{Int}
     con::Vector{Tuple{String,Int}}
     psdcon::Vector{Int}
-    # power_cones::Vector{Vector{Float64}}
-    con_power_pairs::Vector{Tuple{Vector{Int},Vector{Float64}}}
-    var_power_pairs::Vector{Tuple{Vector{Int},Vector{Float64}}}
+    con_power_refs::Vector{Int}
+    var_power_refs::Vector{Int}
+    power_cone_alphas::Vector{Vector{Float64}}
     objacoord::Vector{Tuple{Int,Float64}}
     objfcoord::Vector{Tuple{Int,Int,Int,Float64}}
     objoffset::Float64
@@ -21,7 +21,7 @@ mutable struct CBFData
     nconstr::Int
 end
 
-CBFData() = CBFData("",:xxx,[],[],[],[],[],[],[],[],0.0,[],[],[],[],[],[],0,0)
+CBFData() = CBFData("",:xxx,[],[],[],[],[],[],[],[],[],0.0,[],[],[],[],[],[],0,0)
 
 function parse_matblock(fd,outputmat,num_indices)
     nextline = readline(fd)
@@ -43,7 +43,6 @@ function readcbfdata(filename)
 
     dat = CBFData()
     dat.name = split(basename(filename),".")[1]
-    power_cones = Vector{Float64}[]
 
     while !eof(fd)
         line = readline(fd)
@@ -78,7 +77,7 @@ function readcbfdata(filename)
             for k in 1:lines
                 nextline = readline(fd)
                 if startswith(nextline,"@")
-                    if isempty(power_cones)
+                    if isempty(dat.power_cone_alphas)
                         error("Did not expect variables to be listed in file before power parameters.")
                     end
                     coneref, sz = split(nextline)
@@ -86,11 +85,8 @@ function readcbfdata(filename)
                     cone = "POWER"
                     push!(dat.var, (cone, sz))
                     alpharef1 = split(coneref, ":")[1]
-                    @show alpharef1
                     alpharef2 = parse(Int,alpharef1[2:end])
-                    @show alpharef2
-                    idxs = varcnt+1:varcnt+sz
-                    push!(dat.var_power_pairs, (collect(idxs), power_cones[alpharef2+1]))
+                    push!(dat.var_power_refs, alpharef2+1)
                 else
                     cone, sz = split(nextline)
                     sz = parse(Int,strip(sz))
@@ -124,7 +120,7 @@ function readcbfdata(filename)
             for k in 1:lines
                 nextline = readline(fd)
                 if startswith(nextline,"@")
-                    if isempty(power_cones)
+                    if isempty(dat.power_cone_alphas)
                         error("Did not expect variables to be listed in file before power parameters.")
                     end
                     coneref, sz = split(nextline)
@@ -132,11 +128,8 @@ function readcbfdata(filename)
                     cone = "POWER"
                     push!(dat.con, (cone, sz))
                     alpharef1 = split(coneref, ":")[1]
-                    @show alpharef1
                     alpharef2 = parse(Int,alpharef1[2:end])
-                    @show alpharef2
-                    idxs = constrcnt+1:constrcnt+sz
-                    push!(dat.con_power_pairs, (collect(idxs), power_cones[alpharef2+1]))
+                    push!(dat.con_power_refs, alpharef2+1)
                 else
                     cone, sz = split(nextline)
                     sz = parse(Int,strip(sz))
@@ -179,17 +172,14 @@ function readcbfdata(filename)
             for j in 1:blocks
                 nextline = readline(fd)
                 lines = parse(Int,strip(nextline))
-                @show lines, nextline
                 cone = Float64[]
-                push!(power_cones,cone)
+                push!(dat.power_cone_alphas,cone)
                 for k in 1:lines
                     nextline = readline(fd)
-                    @show k, nextline
                     alpha = parse(Float64,strip(nextline))
                     push!(cone,alpha)
                 end
             end
-            @show power_cones
         end
 
         if startswith(line,"OBJACOORD")

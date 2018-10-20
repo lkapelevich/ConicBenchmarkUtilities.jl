@@ -6,16 +6,21 @@ const conemap_mpb_to_hypatia = Dict(
     :SOCRotated => Hypatia.RotatedSecondOrderCone,
     :ExpPrimal => Hypatia.ExponentialCone,
     # :ExpDual => "EXP*"
-    :SDP => Hypatia.PositiveSemidefiniteCone
+    :SDP => Hypatia.PositiveSemidefiniteCone,
+    :Power => Hypatia.PowerCone
 )
 
 const DimCones = Union{Type{Hypatia.NonpositiveCone}, Type{Hypatia.NonnegativeCone}, Type{Hypatia.SecondOrderCone}, Type{Hypatia.RotatedSecondOrderCone}, Type{Hypatia.PositiveSemidefiniteCone}}
+const ParametricCones =  Union{Type{Hypatia.PowerCone}}
 
 function get_hypatia_cone(t::T, dim::Int) where T <: DimCones
     t(dim)
 end
 function get_hypatia_cone(t::Type{T}, ::Int) where T <: Hypatia.PrimitiveCone
     t()
+end
+function get_hypatia_cone(t::T, alphas::Vector{Float64}) where T <: ParametricCones
+    t(alphas ./ sum(alphas))
 end
 # function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
 function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::Vector{Int})
@@ -27,13 +32,29 @@ function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::Ve
     hypatia_cone
 end
 
-function cbfcones_to_mpbcones!(hypatia_cone::Hypatia.Cone, mpb_cones::Vector{Tuple{Symbol,Vector{Int}}}, offset::Int=0)
-    for c in mpb_cones
+function add_parametric_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, alphas::Vector{Float64}, idxs::Vector{Int})
+    conetype = conemap_mpb_to_hypatia[conesym]
+    conedim = length(idxs)
+    push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, alphas))
+    push!(hypatia_cone.idxs, UnitRange{Int}(idxs[1], idxs[end]))
+    push!(hypatia_cone.useduals, false)
+    hypatia_cone
+end
+
+function mpbcones_to_hypatiacones!(hypatia_cone::Hypatia.Cone, mpb_cones::Vector{Tuple{Symbol,Vector{Int}}}, parametric_refs::Vector{Int}, parameters::Vector{Vector{Float64}},offset::Int=0)
+    power_cones_count = 0
+    for (i, c) in enumerate(mpb_cones)
         c[1] in (:Zero, :Free) && continue
         smallest_ind = minimum(c[2])
         output_idxs = (offset- smallest_ind + 1) .+ c[2]
         offset += length(c[2])
-        add_hypatia_cone!(hypatia_cone, c[1], output_idxs)
+        if c[1] == :Power
+            power_cones_count += 1
+            alphas = parameters[parametric_refs[i]]
+            add_parametric_cone!(hypatia_cone, c[1], alphas, output_idxs)
+        else
+            add_hypatia_cone!(hypatia_cone, c[1], output_idxs)
+        end
     end
     hypatia_cone
 end
@@ -45,8 +66,11 @@ function mbgtohypatia(c_in::Vector{Float64},
     var_cones::Vector{Tuple{Symbol,Vector{Int}}},
     vartypes::Vector{Symbol},
     sense::Symbol,
+    con_power_refs::Vector{Int},
+    var_power_refs::Vector{Int},
+    power_alphas::Vector{Vector{Float64}},
     objoffset::Float64;
-    dense::Bool=false
+    dense::Bool=true
     )
 
     # cannot do integer variables yet
@@ -60,10 +84,7 @@ function mbgtohypatia(c_in::Vector{Float64},
     c = copy(c_in)
     n = length(c_in)
 
-    # brute force correct order for any exponential cones
-    exp_con_indices = Vector{Int}[]
-
-    # count the number of "zero" constraints
+    # count the number of "zero" constraints and correct inconsistent cone definitions
     zero_constrs = 0
     cone_constrs = 0
     for (cone_type, inds) in con_cones
@@ -72,16 +93,17 @@ function mbgtohypatia(c_in::Vector{Float64},
         elseif cone_type == :ExpPrimal
             # expect exponential indices to be in reverse order
             cone_constrs += 3
-            push!(exp_con_indices, inds)
+            # push!(exp_con_indices, inds)
+            A_in[inds, :] .= A_in[reverse(inds), :]
+            b_in[inds] .= b_in[reverse(inds)]
+        elseif cone_type == :Power
+            out_inds = [inds[end]; inds[1:end-1]]
+            A_in[out_inds, :] .= A_in[inds, :]
+            b_in[out_inds] .= b_in[inds]
+            cone_constrs += length(inds)
         else
             cone_constrs += length(inds)
         end
-    end
-
-    # TODO when going CBF -> hypatia directly this will definitely not need to happen
-    for ind_collection in exp_con_indices
-        A_in[ind_collection, :] .= A_in[reverse(ind_collection), :]
-        b_in[ind_collection, :] .= b_in[reverse(ind_collection), :]
     end
 
     # count the number of cone variables
@@ -122,21 +144,19 @@ function mbgtohypatia(c_in::Vector{Float64},
     # constraints are split among A and G
     for (cone_type, inds) in con_cones
         if cone_type == :Zero
-            # i += 1
             nexti = i + length(inds)
             out_inds = i+1:nexti
-            # out_inds = i:i+length(inds)-1
             A[out_inds, :] .= A_in[inds, :]
             b[out_inds] = b_in[inds]
             i = nexti
         else
             if cone_type == :ExpPrimal
                 inds .= reverse(inds)
+            elseif cone_type == :Power
+                inds = [inds[end]; inds[1:end-1]]
             end
             nextj = j + length(inds)
             out_inds = j+1:nextj
-            # j += 1
-            # out_inds = j:j+length(inds)-1
             G[out_inds, :] .= A_in[inds, :]
             h[out_inds] .= b_in[inds]
             j = nextj
@@ -154,11 +174,20 @@ function mbgtohypatia(c_in::Vector{Float64},
 
     # append G
     G[cone_constrs+1:end, :] .= Matrix(-1I, n, n)[cone_var_inds, :]
+    # reorder any variables in the power cone
+    for (cone_type, inds) in var_cones
+        if cone_type == :Power
+            out_inds = [inds[end]; inds[1:end-1]]
+            A_in[:, inds] .= A_in[:, out_inds]
+            G[:, inds] .= G[:, out_inds]
+            c[inds] .= c[out_inds]
+        end
+    end
 
     # prepare cones
     hypatia_cone = Hypatia.Cone()
-    cbfcones_to_mpbcones!(hypatia_cone, con_cones)
-    cbfcones_to_mpbcones!(hypatia_cone, var_cones, cone_constrs)
+    mpbcones_to_hypatiacones!(hypatia_cone, con_cones, con_power_refs, power_alphas)
+    mpbcones_to_hypatiacones!(hypatia_cone, var_cones, var_power_refs, power_alphas, cone_constrs)
 
     (c, A, b, G, h, hypatia_cone)
 
@@ -170,7 +199,7 @@ function cbftohypatia(dat::CBFData; remove_ints::Bool=false, dense::Bool=true)
     if remove_ints
         (c, A, b, con_cones, var_cones, vartypes) = remove_ints_in_nonlinear_cones(c, A, b, con_cones, var_cones, vartypes)
     end
-    (c, A, b, G, h, hypatia_cone) = mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset, dense = dense)
+    (c, A, b, G, h, hypatia_cone) = mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.con_power_refs, dat.var_power_refs, dat.power_cone_alphas, dat.objoffset, dense = dense)
     (c, A, b, G, h, hypatia_cone, dat.objoffset)
 end
 
@@ -230,6 +259,9 @@ end
 #     total_len
 # end
 #
+# """
+#     cbftohypatia(dat::CBFData; roundints::Bool=true, dense::Bool=false)
+# """
 # function cbftohypatia(dat::CBFData; roundints::Bool=true, dense::Bool=false)
 #     @assert dat.nvar == (isempty(dat.var) ? 0 : sum(c -> c[2], dat.var))
 #     @assert dat.nconstr == (isempty(dat.con) ? 0 : sum(c -> c[2], dat.con))
@@ -272,8 +304,9 @@ end
 #     end
 #
 #     # A, b include all vars in zero cone, constraints in zero cone
-#     # number of fixed variables
+#     # zero-cone constraints
 #     m1 = sum(cone[2] for cone in dat.con if cone[1] == "L=")
+#     # number of fixed variables
 #     m2 = sum(cone[2] for cone in dat.var if cone[1] == "L=")
 #     m = m1 + m2
 #     if dense
@@ -282,11 +315,9 @@ end
 #         A = spzeros(m)
 #     end
 #     b = zeros(m)
-#     # for L= constraints just copy over data
+#
 #     I_A, J_A, V_A = unzip(dat.acoord)
-#     # con_inds = [cone[1] == "L=" for cone in dat.con]
-#     Ainds = [i for i in 1:length(I_A) if dat.con[I_A[i]][1] == "L="]
-#     # also include L= constraints involving PSD variables
+#     # also include constraints involving PSD variables
 #     for (conidx, matidx, i, j, v) in dat.fcoord
 #         ix = (hypatia_cone.idxs[nvarcones + matidx + 1]).start + idx_to_offset(dat.psdvar[matidx], i, j, true)
 #         push!(I_A, conidx)
@@ -294,6 +325,9 @@ end
 #         scale = (i == j) ? 1.0 : sqrt(2)
 #         push!(V_A, scale * v)
 #     end
+#
+#     # for L= constraints just copy over data
+#     Ainds = [dat.con[I_A[i]][1] == "L=" for i in 1:length(I_A)]
 #     A[1:m1, :] .= sparse(I_A[Ainds], J_A[Ainds], -V_A[Ainds], m1, dat.nvar + len_psd_var)
 #     # identity for vars in L=
 #     fixed_var_idxs = Int[]
@@ -316,8 +350,11 @@ end
 #     # constraints in cones
 #     m3 = dat.nconstr + len_psd_con - m1
 #     # variables in cones
-#     m4 = length([v for v in dat.var if !(v[1] in ("F", "L="))]) + len_psd_var
-#     m = m3 + m4
+#     m4 = 0
+#     for v in dat.var
+#         (v[1] in ("F", "L=")) || (m4 += 1)
+#     end
+#     m = m3 + m4 + len_psd_var
 #     if dense
 #         G = zeros(m)
 #     else
@@ -325,6 +362,7 @@ end
 #     end
 #     h = zeros(m)
 #
+#     # lookup psd constraint starts
 #     psdconstartidx = Int[]
 #     for i in 1:length(dat.psdcon)
 #         if i == 1
@@ -333,14 +371,16 @@ end
 #             push!(psdconstartidx,psdconstartidx[i-1] + psd_len(dat.psdcon[i-1]))
 #         end
 #     end
-#     I_A, J_A, V_A = unzip(dat.acoord)
+#
+#     # TODO not copy
+#     I_G, J_G, V_G = copy(I_A[!Ainds]), copy(J_A[!Ainds]), copy(V_A[!Ainds])
 #     # add PSD constraints
 #     for (conidx, varidx, i, j, v) in dat.hcoord
 #         ix = psdconstartidx[conidx] + idx_to_offset(dat.psdcon[conidx], i, j, true)
-#         push!(I_A, ix)
-#         push!(J_A, varidx)
+#         push!(I_G, ix)
+#         push!(J_G, varidx)
 #         scale = (i == j) ? 1.0 : sqrt(2)
-#         push!(V_A, scale * v)
+#         push!(V_G, scale * v)
 #     end
 #     Ginds = [i for i in 1:length(I_A) if dat.con[I_A[i]][1] != "L="]
 #

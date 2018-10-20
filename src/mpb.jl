@@ -2,7 +2,8 @@
 const conemap = Dict("L=" => :Zero, "F" => :Free,
                      "L-" => :NonPos, "L+" => :NonNeg,
                      "Q" => :SOC, "QR" => :SOCRotated,
-                     "EXP" => :ExpPrimal, "EXP*" => :ExpDual)
+                     "EXP" => :ExpPrimal, "EXP*" => :ExpDual,
+                     "POWER" => :Power)
 const conemap_rev = Dict(:Zero => "L=", :Free => "F",
                      :NonPos => "L-", :NonNeg => "L+",
                      :SOC => "Q", :SOCRotated => "QR",
@@ -303,7 +304,7 @@ function mpbtocbf(name, c, A, b, con_cones, var_cones, vartypes, sense=:Min)
         end
     end
 
-    return CBFData(name,sense,var,psdvar,con,psdcon,objacoord,objfcoord,0.0,fcoord,acoord,bcoord,hcoord,dcoord,intlist,num_scalar_var,num_scalar_con)
+    return CBFData(name,sense,var,psdvar,con,psdcon,[],[],[],objacoord,objfcoord,0.0,fcoord,acoord,bcoord,hcoord,dcoord,intlist,num_scalar_var,num_scalar_con)
 end
 
 # converts an MPB solution to CBF solution
