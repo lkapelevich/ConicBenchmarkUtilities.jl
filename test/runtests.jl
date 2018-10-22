@@ -22,14 +22,14 @@ using ConicBenchmarkUtilities
     Hypatia.check_data(c1, A1, b1, G, h, hypatia_cone)
     (c2, A2, b2, G2, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c1, A1, b1, G, useQR=true)
     L = Hypatia.QRSymmCache(c2, A2, b2, G2, h, hypatia_cone, Q2, RiQ1)
-    opt = Hypatia.Optimizer(maxiter=100, verbose=true)
-    Hypatia.load_data!(opt, c2, A2, b2, G2, h, hypatia_cone, L)
-    Hypatia.solve!(opt)
+    mdl = Hypatia.Model(maxiter=100, verbose=true)
+    Hypatia.load_data!(mdl, c2, A2, b2, G2, h, hypatia_cone, L)
+    Hypatia.solve!(mdl)
 
     MathProgBase.getsolution(mpb_m)
-    opt.x
+    mdl.x
 
-    @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(opt), atol=1e-4)
+    @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(mdl), atol=1e-4)
 end
 
 @testset "example1d.cbf" begin
@@ -47,11 +47,11 @@ end
     Hypatia.check_data(c1, A1, b1, G, h, hypatia_cone)
     (c2, A2, b2, G2, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c1, A1, b1, G, useQR=true)
     L = Hypatia.QRSymmCache(c2, A2, b2, G2, h, hypatia_cone, Q2, RiQ1)
-    opt = Hypatia.Optimizer(maxiter=200, verbose=true)
-    Hypatia.load_data!(opt, c2, A2, b2, G2, h, hypatia_cone, L)
-    Hypatia.solve!(opt)
+    mdl = Hypatia.Model(maxiter=200, verbose=true)
+    Hypatia.load_data!(mdl, c2, A2, b2, G2, h, hypatia_cone, L)
+    Hypatia.solve!(mdl)
 
-    @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(opt), atol=1e-4)
+    @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(mdl), atol=1e-4)
 end
 
 @testset "example3.cbf" begin
@@ -68,14 +68,14 @@ end
     Hypatia.check_data(c1, A1, b1, G, h, hypatia_cone)
     (c2, A2, b2, G2, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c1, A1, b1, G, useQR=true)
     L = Hypatia.QRSymmCache(c2, A2, b2, G2, h, hypatia_cone, Q2, RiQ1)
-    opt = Hypatia.Optimizer(maxiter=100, verbose=true)
-    Hypatia.load_data!(opt, c2, A2, b2, G2, h, hypatia_cone, L)
-    Hypatia.solve!(opt)
+    mdl = Hypatia.Model(maxiter=100, verbose=true)
+    Hypatia.load_data!(mdl, c2, A2, b2, G2, h, hypatia_cone, L)
+    Hypatia.solve!(mdl)
 
     MathProgBase.getsolution(mpb_m)
-    opt.x
+    mdl.x
 
-    @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(opt), atol=1e-4)
+    @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(mdl), atol=1e-4)
 end
 
 @testset "example4.cbf to mpb" begin
@@ -119,16 +119,16 @@ end
 
     # note order of x1 and x3 swaps for Hypatia power cone definition
     @test c ≈ [-1.0;  0.0;  0.0]
-    @test G ≈ [0.0   0.0   0.0
+    @test G ≈ [0.0  -1.0  -1.0
+              0.0   0.0   0.0
               0.0  -1.0   0.0
               0.0  -1.0  -1.0
               0.0   0.0   0.0
               0.0   0.0  -1.0
-              0.0  -1.0  -1.0
               0.0  -1.0   0.0
               0.0   0.0  -1.0
              -1.0   0.0   0.0]
-    @test h ≈ [1.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0]'
+    @test h ≈ [0.0  1.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0]'
     @test size(A, 1) == 0
     @test size(b, 1) == 0
     @test hypatia_cone.prmtvs[1].alpha ≈ [8.0/9.0; 1.0 /9.0]
@@ -138,12 +138,12 @@ end
     Hypatia.check_data(c, A, b, G, h, hypatia_cone)
     (c1, A1, b1, G1, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c, A, b, G, useQR=true)
     L = Hypatia.QRSymmCache(c1, A1, b1, G1, h, hypatia_cone, Q2, RiQ1)
-    opt = Hypatia.Optimizer(maxiter=100, verbose=false)
-    Hypatia.load_data!(opt, c1, A1, b1, G1, h, hypatia_cone, L)
-    Hypatia.solve!(opt)
+    mdl = Hypatia.Model(maxiter=100, verbose=false)
+    Hypatia.load_data!(mdl, c1, A1, b1, G1, h, hypatia_cone, L)
+    Hypatia.solve!(mdl)
 
-    @test opt.x[1] ≈ 1.0
-    @test Hypatia.get_pobj(opt) ≈ -1.0
+    @test mdl.x[1] ≈ 1.0
+    @test Hypatia.get_pobj(mdl) ≈ -1.0
 end
 
 @testset "example4.cbf to Hypatia" begin
@@ -163,12 +163,12 @@ end
     Hypatia.check_data(c, A, b, G, h, hypatia_cone)
     (c1, A1, b1, G1, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c, A, b, G, useQR=true)
     L = Hypatia.QRSymmCache(c1, A1, b1, G1, h, hypatia_cone, Q2, RiQ1)
-    opt = Hypatia.Optimizer(maxiter=100, verbose=false)
-    Hypatia.load_data!(opt, c1, A1, b1, G1, h, hypatia_cone, L)
-    Hypatia.solve!(opt)
+    mdl = Hypatia.Model(maxiter=100, verbose=false)
+    Hypatia.load_data!(mdl, c1, A1, b1, G1, h, hypatia_cone, L)
+    Hypatia.solve!(mdl)
 
-    @test opt.x ≈ [1.9482; 4.9222] atol=1e-4
-    @test Hypatia.get_pobj(opt) ≈ -5.0984 atol=1e-4
+    @test mdl.x ≈ [1.9482; 4.9222] atol=1e-4
+    @test Hypatia.get_pobj(mdl) ≈ -5.0984 atol=1e-4
 
     # # test CBF writer
     # newdat = mpbtocbf("example", c, A, b, con_cones, var_cones, vartypes, dat.sense)
@@ -295,11 +295,11 @@ end
     Hypatia.check_data(c1, A1, b1, G, h, hypatia_cone)
     (c2, A2, b2, G2, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c1, A1, b1, G, useQR=true)
     L = Hypatia.QRSymmCache(c2, A2, b2, G2, h, hypatia_cone, Q2, RiQ1)
-    opt = Hypatia.Optimizer(maxiter=100, verbose=true)
-    Hypatia.load_data!(opt, c2, A2, b2, G2, h, hypatia_cone, L)
-    Hypatia.solve!(opt)
+    mdl = Hypatia.Model(maxiter=100, verbose=true)
+    Hypatia.load_data!(mdl, c2, A2, b2, G2, h, hypatia_cone, L)
+    Hypatia.solve!(mdl)
 
-    @test Hypatia.get_pobj(opt) ≈ exp(1) atol=1e-5
+    @test Hypatia.get_pobj(mdl) ≈ exp(1) atol=1e-5
 
     # rm("exptest.cbf")
 end

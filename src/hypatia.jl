@@ -23,20 +23,20 @@ function get_hypatia_cone(t::T, alphas::Vector{Float64}) where T <: ParametricCo
     t(alphas ./ sum(alphas))
 end
 # function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
-function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::Vector{Int})
+function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
     conetype = conemap_mpb_to_hypatia[conesym]
     conedim = length(idxs)
     push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, conedim))
-    push!(hypatia_cone.idxs, UnitRange{Int}(idxs[1], idxs[end]))
+    push!(hypatia_cone.idxs, idxs)
     push!(hypatia_cone.useduals, false)
     hypatia_cone
 end
 
-function add_parametric_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, alphas::Vector{Float64}, idxs::Vector{Int})
+function add_parametric_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, alphas::Vector{Float64}, idxs::UnitRange{Int})
     conetype = conemap_mpb_to_hypatia[conesym]
     conedim = length(idxs)
     push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, alphas))
-    push!(hypatia_cone.idxs, UnitRange{Int}(idxs[1], idxs[end]))
+    push!(hypatia_cone.idxs, idxs)
     push!(hypatia_cone.useduals, false)
     hypatia_cone
 end
@@ -46,11 +46,14 @@ function mpbcones_to_hypatiacones!(hypatia_cone::Hypatia.Cone, mpb_cones::Vector
     for (i, c) in enumerate(mpb_cones)
         c[1] in (:Zero, :Free) && continue
         smallest_ind = minimum(c[2])
-        output_idxs = (offset- smallest_ind + 1) .+ c[2]
+        start_ind = offset + 1
+        end_ind = offset + maximum(c[2]) - minimum(c[2]) + 1
+        output_idxs = UnitRange{Int}(start_ind, end_ind)
+        # output_idxs = (offset- smallest_ind + 1) .+ c[2]
         offset += length(c[2])
         if c[1] == :Power
             power_cones_count += 1
-            alphas = parameters[parametric_refs[i]]
+            alphas = parameters[parametric_refs[power_cones_count]]
             add_parametric_cone!(hypatia_cone, c[1], alphas, output_idxs)
         else
             add_hypatia_cone!(hypatia_cone, c[1], output_idxs)
@@ -81,7 +84,6 @@ function mbgtohypatia(c_in::Vector{Float64},
     end
 
     # dimension of x
-    c = copy(c_in)
     n = length(c_in)
 
     # count the number of "zero" constraints and correct inconsistent cone definitions
@@ -90,17 +92,6 @@ function mbgtohypatia(c_in::Vector{Float64},
     for (cone_type, inds) in con_cones
         if cone_type == :Zero
             zero_constrs += length(inds)
-        elseif cone_type == :ExpPrimal
-            # expect exponential indices to be in reverse order
-            cone_constrs += 3
-            # push!(exp_con_indices, inds)
-            A_in[inds, :] .= A_in[reverse(inds), :]
-            b_in[inds] .= b_in[reverse(inds)]
-        elseif cone_type == :Power
-            out_inds = [inds[end]; inds[1:end-1]]
-            A_in[out_inds, :] .= A_in[inds, :]
-            b_in[out_inds] .= b_in[inds]
-            cone_constrs += length(inds)
         else
             cone_constrs += length(inds)
         end
@@ -150,10 +141,9 @@ function mbgtohypatia(c_in::Vector{Float64},
             b[out_inds] = b_in[inds]
             i = nexti
         else
-            if cone_type == :ExpPrimal
-                inds .= reverse(inds)
-            elseif cone_type == :Power
-                inds = [inds[end]; inds[1:end-1]]
+            # exponential cone indices already reversed, only need to fix power
+            if cone_type == :Power
+                inds .= [inds[end]; inds[1:end-1]]
             end
             nextj = j + length(inds)
             out_inds = j+1:nextj
@@ -178,9 +168,9 @@ function mbgtohypatia(c_in::Vector{Float64},
     for (cone_type, inds) in var_cones
         if cone_type == :Power
             out_inds = [inds[end]; inds[1:end-1]]
-            A_in[:, inds] .= A_in[:, out_inds]
+            A[:, inds] .= A[:, out_inds]
             G[:, inds] .= G[:, out_inds]
-            c[inds] .= c[out_inds]
+            c_in[inds] .= c_in[out_inds]
         end
     end
 
@@ -189,7 +179,7 @@ function mbgtohypatia(c_in::Vector{Float64},
     mpbcones_to_hypatiacones!(hypatia_cone, con_cones, con_power_refs, power_alphas)
     mpbcones_to_hypatiacones!(hypatia_cone, var_cones, var_power_refs, power_alphas, cone_constrs)
 
-    (c, A, b, G, h, hypatia_cone)
+    (c_in, A, b, G, h, hypatia_cone)
 
 end
 

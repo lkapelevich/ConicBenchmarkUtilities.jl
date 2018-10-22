@@ -129,6 +129,7 @@ function readcbfdata(filename)
                     push!(dat.con, (cone, sz))
                     alpharef1 = split(coneref, ":")[1]
                     alpharef2 = parse(Int,alpharef1[2:end])
+                    # every time we have a power cone constraint, add a reference to the parameters
                     push!(dat.con_power_refs, alpharef2+1)
                 else
                     cone, sz = split(nextline)
