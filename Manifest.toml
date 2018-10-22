@@ -105,7 +105,7 @@ version = "0.5.3"
 
 [[Hypatia]]
 deps = ["Combinatorics", "DelimitedFiles", "DiffResults", "FFTW", "ForwardDiff", "IterativeSolvers", "LinearAlgebra", "MathOptInterface", "Printf", "Random", "SparseArrays", "SpecialFunctions", "Test"]
-git-tree-sha1 = "c3f056c4706594bc1a6accee456b145a29839e86"
+git-tree-sha1 = "cd5855e8c18d70c31e67c3f3dfb11ffac695470a"
 repo-rev = "master"
 repo-url = "https://github.com/chriscoey/Hypatia.jl"
 uuid = "b99e6be6-89ff-11e8-14f8-45c827f4f8f2"

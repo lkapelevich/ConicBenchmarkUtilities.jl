@@ -141,9 +141,10 @@ function mbgtohypatia(c_in::Vector{Float64},
             b[out_inds] = b_in[inds]
             i = nexti
         else
-            # exponential cone indices already reversed, only need to fix power
             if cone_type == :Power
                 inds .= [inds[end]; inds[1:end-1]]
+            elseif cone_type == :ExpPrimal
+                (inds[1], inds[end]) = (inds[end], inds[1])
             end
             nextj = j + length(inds)
             out_inds = j+1:nextj
