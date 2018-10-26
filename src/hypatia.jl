@@ -163,7 +163,10 @@ function mbgtohypatia(c_in::Vector{Float64},
         @assert all(b[fixed_var_ref] .≈ 0.0)
         @assert all(A[fixed_var_ref, zero_var_inds] .≈ 0.0)
         @assert length(zero_var_inds) == zero_vars
-        A[fixed_var_ref, zero_var_inds] .= 1.0
+        for ind in zero_var_inds
+            i += 1
+            A[i, ind] = 1.0
+        end
     end
 
     # append G
