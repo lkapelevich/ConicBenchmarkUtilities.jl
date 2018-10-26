@@ -32,6 +32,33 @@ using ConicBenchmarkUtilities
     @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(mdl), atol=1e-4)
 end
 
+@testset "example1c.cbf" begin
+    dat = readcbfdata("test/example1c.cbf")
+    # Like example 1, but includes a fixed variable
+
+    c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat)
+
+    mpb_m = MathProgBase.ConicModel(MosekSolver())
+    MathProgBase.loadproblem!(mpb_m, c, A, b, con_cones, var_cones)
+    MathProgBase.optimize!(mpb_m)
+
+    c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat, col_major=true)
+    (c1, A1, b1, G, h, hypatia_cone) = ConicBenchmarkUtilities.mbgtohypatia(c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.con_power_refs, dat.var_power_refs, dat.power_cone_alphas, dat.objoffset, dense = false)
+    @test isapprox(A1, sparse([0.0 -1.0 0.0 0.0 -1.0 0.0 -1.0 0.0 0.0 -1.0; -1.0 0.0 -1.0 0.0 -1.0 -1.41421 -1.0 -1.41421 -1.41421 -1.0; 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0]), atol=1e-4)
+    @test isapprox(b1, [-1.0  -0.5  0.0]', atol=1e-4)
+    Hypatia.check_data(c1, A1, b1, G, h, hypatia_cone)
+    (c2, A2, b2, G2, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c1, A1, b1, G, useQR=true)
+    L = Hypatia.QRSymmCache(c2, A2, b2, G2, h, hypatia_cone, Q2, RiQ1)
+    mdl = Hypatia.Model(maxiter=100, verbose=true)
+    Hypatia.load_data!(mdl, c2, A2, b2, G2, h, hypatia_cone, L)
+    Hypatia.solve!(mdl)
+
+    MathProgBase.getsolution(mpb_m)
+    mdl.x
+
+    @test isapprox(MathProgBase.getobjval(mpb_m), Hypatia.get_pobj(mdl), atol=1e-4)
+end
+
 @testset "example1d.cbf" begin
     dat = readcbfdata("test/example1d.cbf")
     # RSOC constraint, PSD variables
@@ -92,7 +119,7 @@ end
     @test dat.objoffset == 0.0
     @test con_cones == [(:NonPos,[1]),(:NonNeg,[2])]
 
-    m = MathProgBase.ConicModel(ECOSSolver(verbose=0))
+    m = MathProgBase.ConicModel(MosekSolver())
     MathProgBase.loadproblem!(m, -c, A, b, con_cones, var_cones)
     MathProgBase.optimize!(m)
 

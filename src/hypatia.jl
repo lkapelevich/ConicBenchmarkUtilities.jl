@@ -86,7 +86,7 @@ function mbgtohypatia(c_in::Vector{Float64},
     # dimension of x
     n = length(c_in)
 
-    # count the number of "zero" constraints and correct inconsistent cone definitions
+    # count the number of "zero" constraints
     zero_constrs = 0
     cone_constrs = 0
     for (cone_type, inds) in con_cones
@@ -99,6 +99,7 @@ function mbgtohypatia(c_in::Vector{Float64},
 
     # count the number of cone variables
     cone_vars = 0
+    zero_vars = 0
     cone_var_inds = Int[]
     zero_var_inds = Int[]
     zero_var_cones = Int[]
@@ -107,9 +108,9 @@ function mbgtohypatia(c_in::Vector{Float64},
         cone_count += 1
         # TODO treat fixed variables better
         if cone_type == :Zero
-            zero_constrs += length(inds)
             push!(zero_var_inds, inds...)
             push!(zero_var_cones, cone_count)
+            zero_vars += length(inds)
         elseif cone_type == :ExpPrimal
             # take out if this ever happens
             error("We didn't know CBF allows variables in exponential cones.")
@@ -119,6 +120,8 @@ function mbgtohypatia(c_in::Vector{Float64},
         end
     end
     @assert length(cone_var_inds) == cone_vars
+    # variables that are fixed at zero count as constraints
+    zero_constrs += zero_vars
 
     h = zeros(cone_constrs + cone_vars)
     b = zeros(zero_constrs)
@@ -130,6 +133,7 @@ function mbgtohypatia(c_in::Vector{Float64},
         G = spzeros(cone_constrs + cone_vars, n)
     end
 
+    # keep index of constraints in A and G
     i = 0
     j = 0
     # constraints are split among A and G
@@ -154,13 +158,12 @@ function mbgtohypatia(c_in::Vector{Float64},
         end
     end
     # corner case, add variables fixed at zero as constraints TODO treat fixed variables better
-    b[zero_var_inds] .= 0.0
-    for (_, inds) in var_cones[zero_var_cones]
-        l = length(inds)
-        nexti = i + l
-        out_inds = i+1:nexti
-        A[out_inds, inds] .=  Matrix{Float64}(I, l, l)
-        i = nexti
+    if zero_vars > 0
+        fixed_var_ref = zero_constrs-zero_vars+1:zero_constrs
+        @assert all(b[fixed_var_ref] .≈ 0.0)
+        @assert all(A[fixed_var_ref, zero_var_inds] .≈ 0.0)
+        @assert length(zero_var_inds) == zero_vars
+        A[fixed_var_ref, zero_var_inds] .= 1.0
     end
 
     # append G
@@ -180,7 +183,7 @@ function mbgtohypatia(c_in::Vector{Float64},
     mpbcones_to_hypatiacones!(hypatia_cone, con_cones, con_power_refs, power_alphas)
     mpbcones_to_hypatiacones!(hypatia_cone, var_cones, var_power_refs, power_alphas, cone_constrs)
 
-    (c_in, A, b, G, h, hypatia_cone)
+    return (c_in, A, b, G, h, hypatia_cone)
 
 end
 

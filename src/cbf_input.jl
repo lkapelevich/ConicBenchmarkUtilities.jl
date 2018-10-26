@@ -217,6 +217,7 @@ function readcbfdata(filename)
             parse_matblock(fd,dat.dcoord,3)
         end
     end
+    GZip.close(fd)
 
     return dat
 end
