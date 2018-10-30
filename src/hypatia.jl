@@ -1,26 +1,26 @@
 
 const conemap_mpb_to_hypatia = Dict(
-    :NonPos => Hypatia.NonpositiveCone,
-    :NonNeg =>  Hypatia.NonnegativeCone,
-    :SOC => Hypatia.SecondOrderCone,
-    :SOCRotated => Hypatia.RotatedSecondOrderCone,
-    :ExpPrimal => Hypatia.ExponentialCone,
+    :NonPos => Hypatia.Nonpositive,
+    :NonNeg =>  Hypatia.Nonnegative,
+    :SOC => Hypatia.EpiNormEucl,
+    :SOCRotated => Hypatia.EpiPerSquare,
+    :ExpPrimal => Hypatia.HypoPerLog,
     # :ExpDual => "EXP*"
-    :SDP => Hypatia.PositiveSemidefiniteCone,
-    :Power => Hypatia.PowerCone
+    :SDP => Hypatia.PosSemidef,
+    :Power => Hypatia.HypoGeomean
 )
 
-const DimCones = Union{Type{Hypatia.NonpositiveCone}, Type{Hypatia.NonnegativeCone}, Type{Hypatia.SecondOrderCone}, Type{Hypatia.RotatedSecondOrderCone}, Type{Hypatia.PositiveSemidefiniteCone}}
-const ParametricCones =  Union{Type{Hypatia.PowerCone}}
+const DimCones = Union{Type{Hypatia.Nonpositive}, Type{Hypatia.Nonnegative}, Type{Hypatia.EpiNormEucl}, Type{Hypatia.EpiPerSquare}, Type{Hypatia.PosSemidef}}
+const ParametricCones =  Union{Type{Hypatia.HypoGeomean}}
 
 function get_hypatia_cone(t::T, dim::Int) where T <: DimCones
-    t(dim)
+    t(dim, false)
 end
 function get_hypatia_cone(t::Type{T}, ::Int) where T <: Hypatia.PrimitiveCone
     t()
 end
 function get_hypatia_cone(t::T, alphas::Vector{Float64}) where T <: ParametricCones
-    t(alphas ./ sum(alphas))
+    t(alphas ./ sum(alphas), false)
 end
 # function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
 function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
@@ -28,7 +28,6 @@ function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::Un
     conedim = length(idxs)
     push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, conedim))
     push!(hypatia_cone.idxs, idxs)
-    push!(hypatia_cone.useduals, false)
     hypatia_cone
 end
 
@@ -37,7 +36,6 @@ function add_parametric_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, alpha
     conedim = length(idxs)
     push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, alphas))
     push!(hypatia_cone.idxs, idxs)
-    push!(hypatia_cone.useduals, false)
     hypatia_cone
 end
 
@@ -147,8 +145,6 @@ function mbgtohypatia(c_in::Vector{Float64},
         else
             if cone_type == :Power
                 inds .= [inds[end]; inds[1:end-1]]
-            elseif cone_type == :ExpPrimal
-                (inds[1], inds[end]) = (inds[end], inds[1])
             end
             nextj = j + length(inds)
             out_inds = j+1:nextj
