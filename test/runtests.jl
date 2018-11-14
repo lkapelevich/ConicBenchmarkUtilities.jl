@@ -313,8 +313,8 @@ end
     MathProgBase.optimize!(md)
     @test MathProgBase.status(md) == :Optimal
     x_sol = MathProgBase.getsolution(md)
-    @test x_sol ≈ [1.0,exp(1),exp(1)] atol=1e-5
-    @test MathProgBase.getobjval(md) ≈ exp(1) atol=1e-5
+    @test x_sol ≈ [1.0,exp(1),exp(1),exp(1),1.0,1.0] atol=1e-5
+    @test MathProgBase.getobjval(md) ≈ 2*exp(1) atol=1e-5
 
     dat = readcbfdata("test/exptest.cbf")
     c, A, b, con_cones, var_cones, vartypes, dat.sense, dat.objoffset = cbftompb(dat, col_major=true)
@@ -326,7 +326,7 @@ end
     Hypatia.load_data!(mdl, c2, A2, b2, G2, h, hypatia_cone, L)
     Hypatia.solve!(mdl)
 
-    @test Hypatia.get_pobj(mdl) ≈ exp(1) atol=1e-5
+    @test Hypatia.get_pobj(mdl) ≈ 2*exp(1) atol=1e-5
 
     # rm("exptest.cbf")
 end

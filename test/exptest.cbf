@@ -4,24 +4,32 @@ VER
 OBJSENSE
 MIN
 VAR
-3 1
+6 2
 F 3
+EXP 3
 CON
-5 3
+7 5
 EXP 3
 L= 1
 L+ 1
+L= 1
+L= 1
 OBJACOORD
-1
+2
 2 1.0
+3 1.0
 ACOORD
-5
+7
 2 0 1.0
 4 0 1.0
 0 1 1.0
 3 1 1.0
 3 2 -1.0
+5 4 1.0
+6 5 1.0
 BCOORD
-2
+4
 1 1.0
 4 -1.0
+5 -1.0
+6 -1.0
