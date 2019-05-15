@@ -7,11 +7,11 @@ const conemap_mpb_to_hypatia = Dict(
     :ExpPrimal => Hypatia.HypoPerLog,
     # :ExpDual => "EXP*"
     :SDP => Hypatia.PosSemidef,
-    :Power => Hypatia.HypoGeomean
+    :Power => Hypatia.EpiPerPower
 )
 
 const DimCones = Union{Type{Hypatia.Nonpositive}, Type{Hypatia.Nonnegative}, Type{Hypatia.EpiNormEucl}, Type{Hypatia.EpiPerSquare}, Type{Hypatia.PosSemidef}}
-const ParametricCones =  Union{Type{Hypatia.HypoGeomean}}
+const ParametricCones =  Union{Type{Hypatia.EpiPerPower}}
 
 function get_hypatia_cone(t::T, dim::Int) where T <: DimCones
     t(dim, false)
@@ -19,8 +19,8 @@ end
 function get_hypatia_cone(t::Type{T}, ::Int) where T <: Hypatia.PrimitiveCone
     t()
 end
-function get_hypatia_cone(t::T, alphas::Vector{Float64}) where T <: ParametricCones
-    t(alphas ./ sum(alphas), false)
+function get_hypatia_cone(t::T, hypatia_alpha::Float64) where T <: ParametricCones
+    t(hypatia_alpha, false)
 end
 # function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
 function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::UnitRange{Int})
@@ -32,9 +32,12 @@ function add_hypatia_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, idxs::Un
 end
 
 function add_parametric_cone!(hypatia_cone::Hypatia.Cone, conesym::Symbol, alphas::Vector{Float64}, idxs::UnitRange{Int})
+    # alphas from CBF are unnormalized floats
+    @assert length(alphas) == 2
+    hypatia_alpha = sum(alphas) / alphas[1]
     conetype = conemap_mpb_to_hypatia[conesym]
     conedim = length(idxs)
-    push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, alphas))
+    push!(hypatia_cone.prmtvs, get_hypatia_cone(conetype, hypatia_alpha))
     push!(hypatia_cone.idxs, idxs)
     hypatia_cone
 end
@@ -140,9 +143,9 @@ function mbgtohypatia(c_in::Vector{Float64},
             b[out_inds] = b_in[inds]
             i = nexti
         else
-            if cone_type == :Power
-                inds .= [inds[end]; inds[1:end-1]]
-            end
+            # if cone_type == :Power
+            #     inds .= [inds[end]; inds[1:end-1]]
+            # end
             nextj = j + length(inds)
             out_inds = j+1:nextj
             G[out_inds, :] .= A_in[inds, :]
@@ -165,14 +168,14 @@ function mbgtohypatia(c_in::Vector{Float64},
     # append G
     G[cone_constrs+1:end, :] .= Matrix(-1I, n, n)[cone_var_inds, :]
     # reorder any variables in the power cone
-    for (cone_type, inds) in var_cones
-        if cone_type == :Power
-            out_inds = [inds[end]; inds[1:end-1]]
-            A[:, inds] .= A[:, out_inds]
-            G[:, inds] .= G[:, out_inds]
-            c_in[inds] .= c_in[out_inds]
-        end
-    end
+    # for (cone_type, inds) in var_cones
+    #     if cone_type == :Power
+    #         out_inds = [inds[end]; inds[1:end-1]]
+    #         A[:, inds] .= A[:, out_inds]
+    #         G[:, inds] .= G[:, out_inds]
+    #         c_in[inds] .= c_in[out_inds]
+    #     end
+    # end
 
     # prepare cones
     hypatia_cone = Hypatia.Cone()

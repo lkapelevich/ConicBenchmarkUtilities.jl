@@ -145,22 +145,26 @@ end
     c, A, b, G, h, hypatia_cone, dat.objoffset = cbftohypatia(dat, dense=true)
 
     # note order of x1 and x3 swaps for Hypatia power cone definition
-    @test c ≈ [-1.0;  0.0;  0.0]
-    @test G ≈ [0.0  -1.0  -1.0
-              0.0   0.0   0.0
-              0.0  -1.0   0.0
-              0.0  -1.0  -1.0
-              0.0   0.0   0.0
-              0.0   0.0  -1.0
-              0.0  -1.0   0.0
-              0.0   0.0  -1.0
-             -1.0   0.0   0.0]
-    @test h ≈ [0.0  1.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0]'
+    @test c ≈ [0.0;  0.0;  -1.0]
+    # @test G ≈ [0.0  -1.0  -1.0
+    #           0.0   0.0   0.0
+    #           0.0  -1.0   0.0
+    #           0.0  -1.0  -1.0
+    #           0.0   0.0   0.0
+    #           0.0   0.0  -1.0
+    #           0.0  -1.0   0.0
+    #           0.0   0.0  -1.0
+    #          -1.0   0.0   0.0]
+    # @test h ≈ [0.0  1.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0]'
+    @test h ≈ [1.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0]'
     @test size(A, 1) == 0
     @test size(b, 1) == 0
-    @test hypatia_cone.prmtvs[1].alpha ≈ [8.0/9.0; 1.0 /9.0]
-    @test hypatia_cone.prmtvs[2].alpha ≈ [8.0/9.0; 1.0 /9.0]
-    @test hypatia_cone.prmtvs[3].alpha ≈ [0.5; 0.5]
+    # @test hypatia_cone.prmtvs[1].alpha ≈ [8.0/9.0; 1.0 /9.0]
+    @test hypatia_cone.prmtvs[1].alpha ≈ 9.0/8.0
+    # @test hypatia_cone.prmtvs[2].alpha ≈ [8.0/9.0; 1.0 /9.0]
+    @test hypatia_cone.prmtvs[2].alpha ≈ 9.0/8.0
+    # @test hypatia_cone.prmtvs[3].alpha ≈ [0.5; 0.5]
+    @test hypatia_cone.prmtvs[3].alpha ≈ 2.0
 
     Hypatia.check_data(c, A, b, G, h, hypatia_cone)
     (c1, A1, b1, G1, prkeep, dukeep, Q2, RiQ1) = Hypatia.preprocess_data(c, A, b, G, useQR=true)
